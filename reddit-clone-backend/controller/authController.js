@@ -15,9 +15,13 @@ const generateAccessToken = (userId) => {
 };
 
 const generateRefreshToken = (userId) => {
-  return jwt.sign({ userId }, JWT_SECRET, {
-    expiresIn: REFRESH_TOKEN_EXPIRES_IN, // Now properly formatted as "7d"
-  });
+  // Add current timestamp and random string to ensure uniqueness
+  const uniqueData = {
+    userId,
+    timestamp: Date.now(),
+    random: Math.random().toString(36).substring(2, 15),
+  };
+  return jwt.sign(uniqueData, JWT_SECRET, { expiresIn: "7d" });
 };
 
 // Helper function to convert timespan strings to milliseconds
@@ -50,6 +54,7 @@ const setCookies = (res, accessToken, refreshToken) => {
     secure: isProduction,
     sameSite: isProduction ? "strict" : "lax",
     maxAge: parseTimespanToMs(JWT_EXPIRES_IN), // Convert "15m" to milliseconds
+    path: "/", // Ensure cookie is available across all paths
   });
 
   res.cookie("refreshToken", refreshToken, {
@@ -57,30 +62,31 @@ const setCookies = (res, accessToken, refreshToken) => {
     secure: isProduction,
     sameSite: isProduction ? "strict" : "lax",
     maxAge: parseTimespanToMs(REFRESH_TOKEN_EXPIRES_IN), // Convert "7d" to milliseconds
+    path: "/api/auth/refresh", // Restrict refresh token to refresh endpoint only
   });
 };
 
 // Signup
 const signup = async (req, res) => {
   try {
-    const { name, slug, password } = req.body;
+    const { userName, email, password } = req.body;
 
     // Validate input
-    if (!name || !slug || !password) {
+    if (!userName || !email || !password) {
       return res
         .status(400)
-        .json({ error: "Name, slug, and password are required" });
+        .json({ error: "userName, email, and password are required" });
     }
 
     // Check for existing user
     const existingUser = await prisma.user.findFirst({
-      where: { OR: [{ name }, { slug }] },
+      where: { OR: [{ userName }, { email }] },
     });
 
     if (existingUser) {
       return res
         .status(409)
-        .json({ error: "User with this name or slug already exists" });
+        .json({ error: "User with this userName or email already exists" });
     }
 
     // Hash password
@@ -89,15 +95,15 @@ const signup = async (req, res) => {
     // Create user
     const user = await prisma.user.create({
       data: {
-        name,
-        slug,
+        userName,
+        email,
         password: hashedPassword,
         isActive: true,
       },
       select: {
         id: true,
-        name: true,
-        slug: true,
+        userName: true,
+        email: true,
         createdAt: true,
       },
     });
@@ -132,20 +138,22 @@ const signup = async (req, res) => {
 // Login
 const login = async (req, res) => {
   try {
-    const { name, password } = req.body;
+    const { userName, password } = req.body;
 
     // Validate input
-    if (!name || !password) {
-      return res.status(400).json({ error: "Name and password are required" });
+    if (!userName || !password) {
+      return res
+        .status(400)
+        .json({ error: "userName and password are required" });
     }
 
     // Find user
     const user = await prisma.user.findUnique({
-      where: { name },
+      where: { userName },
       select: {
         id: true,
-        name: true,
-        slug: true,
+        userName: true,
+        email: true,
         password: true,
         isActive: true,
       },
@@ -256,29 +264,83 @@ const refreshToken = async (req, res) => {
       return res.status(401).json({ error: "Invalid refresh token" });
     }
 
-    // Generate new tokens
-    const newAccessToken = generateAccessToken(payload.userId);
-    const newRefreshToken = generateRefreshToken(payload.userId);
+    // Check if user is still active
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: {
+        id: true,
+        userName: true,
+        email: true,
+        isActive: true,
+      },
+    });
 
-    // Replace old refresh token with new one
-    await prisma.$transaction([
-      prisma.refreshToken.update({
-        where: { id: tokenRecord.id },
-        data: { revokedAt: new Date() },
-      }),
-      prisma.refreshToken.create({
-        data: {
-          token: newRefreshToken,
-          userId: payload.userId,
-          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-        },
-      }),
-    ]);
+    if (!user || !user.isActive) {
+      return res.status(401).json({ error: "User not found or inactive" });
+    }
+
+    // Generate new access token
+    const newAccessToken = generateAccessToken(payload.userId);
+
+    // Modified part: Handle refresh token creation with retry logic
+    let attempts = 0;
+    const maxAttempts = 3;
+    let newRefreshToken;
+    let success = false;
+
+    while (attempts < maxAttempts && !success) {
+      try {
+        // Generate token with additional uniqueness factors
+        newRefreshToken = jwt.sign(
+          {
+            userId: payload.userId,
+            timestamp: Date.now(),
+            random: Math.random().toString(36).substring(2, 15),
+          },
+          JWT_SECRET,
+          { expiresIn: "7d" }
+        );
+
+        // Try to execute the transaction
+        await prisma.$transaction([
+          prisma.refreshToken.update({
+            where: { id: tokenRecord.id },
+            data: { revokedAt: new Date() },
+          }),
+          prisma.refreshToken.create({
+            data: {
+              token: newRefreshToken,
+              userId: payload.userId,
+              expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+            },
+          }),
+        ]);
+
+        success = true;
+      } catch (error) {
+        if (error.code === "P2002" && error.meta?.target?.includes("token")) {
+          attempts++;
+          console.log(
+            `Token collision detected, retrying (${attempts}/${maxAttempts})...`
+          );
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    if (!success) {
+      return res.status(500).json({ error: "Failed to generate unique token" });
+    }
 
     // Set new cookies
     setCookies(res, newAccessToken, newRefreshToken);
 
+    // Return user data
+    delete user.isActive;
+
     res.json({
+      user,
       accessToken: newAccessToken,
       refreshToken: newRefreshToken,
     });
@@ -287,5 +349,37 @@ const refreshToken = async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 };
+// Get current user
+const getCurrentUser = async (req, res) => {
+  try {
+    // The auth middleware will have already verified the token and added the user ID
+    const userId = req.userId;
 
-export { signup, login, logout, refreshToken };
+    if (!userId) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        userName: true,
+        email: true,
+        createdAt: true,
+        lastLogin: true,
+        isActive: true,
+      },
+    });
+
+    if (!user || !user.isActive) {
+      return res.status(401).json({ error: "User not found or inactive" });
+    }
+
+    res.json({ user });
+  } catch (error) {
+    console.error("Get current user error:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+};
+
+export { signup, login, logout, refreshToken, getCurrentUser };

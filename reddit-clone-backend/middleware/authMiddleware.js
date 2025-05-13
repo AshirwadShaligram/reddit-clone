@@ -2,60 +2,70 @@ import jwt from "jsonwebtoken";
 import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
-const JWT_SECRET = process.env.JWT_SECRET || "your-secret-key";
+const JWT_SECRET = process.env.JWT_SECRET;
 
-// Protect routes - only for authenticated users
 const protect = async (req, res, next) => {
   try {
-    // 1) Get token and check if it exists
+    // Skip protection for refresh endpoint
+    if (req.path === "/api/auth/refresh") {
+      return next();
+    }
+
+    // Token extraction
     let token;
-    if (
-      req.headers.authorization &&
-      req.headers.authorization.startsWith("Bearer")
-    ) {
+    if (req.cookies.accessToken) {
+      token = req.cookies.accessToken;
+    } else if (req.headers.authorization?.startsWith("Bearer")) {
       token = req.headers.authorization.split(" ")[1];
-    } else if (req.cookies.jwt) {
-      token = req.cookies.jwt;
     }
 
     if (!token || token === "loggedout") {
       return res.status(401).json({
         status: "fail",
-        message: "You are not logged in! Please log in to get access.",
+        message: "Please log in to access this resource",
       });
     }
 
-    // 2) Verify token
+    // Token verification
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    // 3) Check if user still exists
+    // Fresh user data fetch
     const currentUser = await prisma.user.findUnique({
-      where: { id: decoded.userId }, // Changed from decoded.id to decoded.userId
+      where: { id: decoded.userId },
+      select: {
+        id: true,
+        userName: true,
+        email: true,
+        createdAt: true,
+        isActive: true,
+      },
     });
 
-    if (!currentUser) {
+    if (!currentUser || !currentUser.isActive) {
       return res.status(401).json({
         status: "fail",
-        message: "The user belonging to this token no longer exists.",
+        message: "User account is inactive or deleted",
       });
     }
 
-    // 4) Grant access to protected route
+    // Attach fresh user data to request
     req.user = currentUser;
+    req.userId = currentUser.id;
     next();
   } catch (err) {
-    console.error("Authentication error:", err); // More detailed error logging
-
-    let message = "Invalid token or session expired. Please log in again.";
-    if (err.name === "TokenExpiredError") {
-      message = "Your session has expired. Please log in again.";
-    } else if (err.name === "JsonWebTokenError") {
-      message = "Invalid authentication token.";
+    // Handle refresh token flow
+    if (err.name === "TokenExpiredError" && req.path !== "/api/auth/refresh") {
+      return res.status(401).json({
+        status: "fail",
+        message: "Session expired. Attempting to refresh...",
+        shouldRefresh: true,
+      });
     }
 
+    console.error(`Authentication error [${req.path}]:`, err);
     res.status(401).json({
       status: "fail",
-      message,
+      message: "Authentication failed",
     });
   }
 };
