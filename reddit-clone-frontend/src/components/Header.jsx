@@ -1,6 +1,8 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
+import { useDispatch, useSelector } from "react-redux";
+import { logout } from "@/store/slice/authSlice.js"; // Adjust the import path
 import {
   Search,
   User,
@@ -23,15 +25,30 @@ import {
 } from "./ui/dropdown-menu";
 import { Avatar } from "./ui/avatar";
 import { AvatarFallback, AvatarImage } from "@radix-ui/react-avatar";
+import api from "@/lib/axiosInstance";
 
 export default function Header() {
-  const [user, setUser] = useState(false);
+  const auth = useSelector((state) => state.auth);
   const [notification] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const [showDropdown, setShowDropdown] = useState(false);
+  const dispatch = useDispatch();
 
-  const handleLogin = () => setUser(true);
-  const handleLogout = () => setUser(false);
+  // Destructure for easier access
+  const { user, isAuthenticated } = auth;
+
+  const handleLogout = async () => {
+    try {
+      // Clear client-side state immediately
+      dispatch(logout());
+
+      // Call logout API
+      await api.post("/api/auth/logout");
+    } catch (err) {
+      console.error("Logout failed:", err);
+      // Still ensure user is logged out client-side
+      dispatch(logout());
+    }
+  };
 
   return (
     <header className="sticky top-0 z-50 backdrop-blur-md bg-white/80 dark:bg-gray-900/80 border-b border-gray-100 dark:border-gray-800">
@@ -70,8 +87,7 @@ export default function Header() {
             {!user ? (
               <div className="flex space-x-2">
                 <LoginPopover
-                  onLogin={handleLogin}
-                  // onSignup={handleSignup}
+                  // onLogin={handleLogin}
                   user={user}
                   className="px-3 sm:px-4 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
                 >
@@ -121,6 +137,9 @@ export default function Header() {
                           <AvatarFallback>CN</AvatarFallback>
                         </Avatar>
                         <span className="text-xl">My Profile</span>
+                        <div>
+                          <h1>{user.userName}</h1>
+                        </div>
                       </DropdownMenuItem>
                       <DropdownMenuItem className=" h-16">
                         <VenetianMask className="text-foreground" />

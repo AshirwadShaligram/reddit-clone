@@ -208,14 +208,26 @@ const login = async (req, res) => {
 
 // Logout
 const logout = async (req, res) => {
+  const isProduction = NODE_ENV === "production";
+
   try {
     const { refreshToken } = req.cookies;
 
-    // Clear cookies
-    res.clearCookie("accessToken");
-    res.clearCookie("refreshToken");
+    // CLear cookies with same options they were set with in setCookies-
+    res.clearCookie("accessTokne", {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? "strict" : "lax",
+      path: "/",
+    });
 
-    // Revoke refresh token if provided
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: isProduction,
+      sameSite: isProduction ? "strict" : "lax",
+      path: "/api/auth/refresh",
+    });
+
     if (refreshToken) {
       await prisma.refreshToken.updateMany({
         where: {
@@ -228,7 +240,7 @@ const logout = async (req, res) => {
 
     res.json({ message: "Logged out successfully" });
   } catch (error) {
-    console.error("Logout error:", error);
+    console.error("logout error: ", error);
     res.status(500).json({ error: "Internal server error" });
   }
 };

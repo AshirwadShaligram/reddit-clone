@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import {
   Popover,
   PopoverContent,
@@ -9,97 +9,121 @@ import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { useRouter } from "next/navigation";
+import api from "@/lib/axiosInstance";
+import { setCredentials } from "@/store/slice/authSlice";
+import { useDispatch } from "react-redux";
 
-export function LoginPopover({ user, onLogin, onSignup }) {
+export function LoginPopover({ onLogin }) {
   const router = useRouter();
   const [currentView, setCurrentView] = useState("login");
-  const [isOpen, setIsOpen] = useState(false);
+  const [open, setOpen] = useState(false);
 
   // Form state for login
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
 
   // Form state for signup
-  const [username, setUsername] = useState("");
+  const [userName, setUserName] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
   const [signupPassword, setSignupPassword] = useState("");
 
-  // // Track popover open/close
-  // const handlePopoverOpenChange = (open) => {
-  //   setIsOpen(open);
-  //   console.log("Popover state changed to:", open ? "open" : "closed");
-
-  //   // Reset to login view when closed
-  //   if (!open) {
-  //     setCurrentView("login");
-  //     console.log("Reset to login view");
-  //   }
-  // };
-
-  // Log view changes
-  useEffect(() => {
-    console.log(`View changed to: ${currentView}`);
-  }, [currentView]);
+  const dispatch = useDispatch();
 
   // Handler for login
-  const handleLogin = () => {
-    console.log("Login form submitted");
-    console.log("Email:", loginEmail);
-    console.log("Password:", loginPassword);
+  const handleLogin = async ({ email, password }) => {
+    try {
+      const res = await api.post(`/api/auth/login`, {
+        userName: email, // Using email as userName to match backend
+        password,
+      });
+      const { user } = res.data;
 
-    if (onLogin) {
-      onLogin({ email: loginEmail, password: loginPassword });
+      // Update Redux Store - no need to store tokens directly
+      // as they'll be managed by HTTP-only cookies
+      dispatch(setCredentials({ user }));
+
+      // Call onLogin callback to update parent component
+      if (onLogin) onLogin();
+
+      // Reset form and close popover
+      setLoginEmail("");
+      setLoginPassword("");
+      setOpen(false);
+    } catch (err) {
+      console.error("Login failed", err);
+      // You might want to add error handling UI here
     }
   };
 
   // Handler for signup
-  const handleSignup = () => {
-    console.log("Signup form submitted");
-    console.log("Username:", username);
-    console.log("Email:", signupEmail);
-    console.log("Password:", signupPassword);
+  const handleSignup = async () => {
+    console.log({ email: signupEmail, password: signupPassword, userName });
 
-    if (onSignup) {
-      onSignup({ username, email: signupEmail, password: signupPassword });
+    try {
+      const res = await api.post(`/api/auth/signup`, {
+        userName,
+        email: signupEmail,
+        password: signupPassword,
+      });
+      const { user } = res.data;
+
+      // Update Redux Store - only store user data
+      // Tokens will be managed by HTTP-only cookies
+      dispatch(setCredentials({ user }));
+
+      // Call onLogin callback to update parent component
+      if (onLogin) onLogin();
+
+      // Reset form
+      setUserName("");
+      setSignupEmail("");
+      setSignupPassword("");
+
+      // Close the popover
+      setOpen(false);
+      // Optionally switch to login view for next time
+      setCurrentView("login");
+    } catch (err) {
+      console.error("Signup failed", err);
+      // You might want to add error handling UI here
     }
   };
 
   const showLoginView = () => setCurrentView("login");
   const showSignupView = () => setCurrentView("signup");
 
-  // Log form value changes
-  const handleLoginEmailChange = (e) => {
+  // Form change handlers
+  const handleloginEmailChange = (e) => {
     setLoginEmail(e.target.value);
-    console.log("Login email changed:", e.target.value);
   };
 
   const handleLoginPasswordChange = (e) => {
     setLoginPassword(e.target.value);
-    console.log("Login password changed:", e.target.value);
   };
 
-  const handleUsernameChange = (e) => {
-    setUsername(e.target.value);
-    console.log("Username changed:", e.target.value);
+  const handleUserNameChange = (e) => {
+    setUserName(e.target.value);
   };
 
   const handleSignupEmailChange = (e) => {
     setSignupEmail(e.target.value);
-    console.log("Signup email changed:", e.target.value);
   };
 
   const handleSignupPasswordChange = (e) => {
     setSignupPassword(e.target.value);
-    console.log("Signup password changed:", e.target.value);
   };
 
   // Login with social
   const handleGoogleLogin = () => {
     console.log("Google login clicked");
+    // Implement Google login logic
+    // On success, call setOpen(false) to close the popover
   };
 
   const handleGitHubLogin = () => {
     console.log("GitHub login clicked");
+    // Implement GitHub login logic
+    // On success, call setOpen(false) to close the popover
   };
 
   // Login form content
@@ -119,7 +143,7 @@ export function LoginPopover({ user, onLogin, onSignup }) {
             placeholder="name@example.com"
             type="email"
             value={loginEmail}
-            onChange={handleLoginEmailChange}
+            onChange={handleloginEmailChange}
           />
         </div>
         <div className="space-y-2">
@@ -131,7 +155,12 @@ export function LoginPopover({ user, onLogin, onSignup }) {
             onChange={handleLoginPasswordChange}
           />
         </div>
-        <Button className="w-full" onClick={handleLogin}>
+        <Button
+          className="w-full"
+          onClick={() =>
+            handleLogin({ email: loginEmail, password: loginPassword })
+          }
+        >
           Sign in
         </Button>
         <div className="relative">
@@ -201,8 +230,8 @@ export function LoginPopover({ user, onLogin, onSignup }) {
           <Input
             id="username"
             placeholder="johndoe"
-            value={username}
-            onChange={handleUsernameChange}
+            value={userName}
+            onChange={handleUserNameChange}
           />
         </div>
         <div className="space-y-2">
@@ -279,19 +308,10 @@ export function LoginPopover({ user, onLogin, onSignup }) {
     </div>
   );
 
-  // Track popover open/close
-  const handlePopoverOpenChange = (open) => {
-    console.log("Popover state changed to:", open ? "open" : "closed");
-  };
-
   return (
-    <Popover onOpenChange={handlePopoverOpenChange}>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          className="px-4 py-1.5 text-sm font-medium"
-          onClick={() => console.log("Sign In button clicked")}
-        >
+        <Button variant="ghost" className="px-4 py-1.5 text-sm font-medium">
           Sign In
         </Button>
       </PopoverTrigger>

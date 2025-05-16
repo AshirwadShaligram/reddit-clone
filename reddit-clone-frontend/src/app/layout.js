@@ -2,6 +2,9 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import Header from "@/components/Header";
+import ReduxProvider from "@/store/ReduxProvider";
+import { AuthProvider } from "@/store/AuthProvider";
+import { Toaster } from "@/components/ui/sonner";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -22,15 +25,20 @@ export default function RootLayout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <body className="bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100">
-        <ThemeProvider
-          attribute="class"
-          defaultTheme="system"
-          enableSystem
-          disableTransitionOnChange
-        >
-          <Header />
-          <main>{children}</main>
-        </ThemeProvider>
+        <ReduxProvider>
+          <AuthProvider>
+            <ThemeProvider
+              attribute="class"
+              defaultTheme="system"
+              enableSystem
+              disableTransitionOnChange
+            >
+              <Header />
+              <main>{children}</main>
+              <Toaster />
+            </ThemeProvider>
+          </AuthProvider>
+        </ReduxProvider>
       </body>
     </html>
   );
