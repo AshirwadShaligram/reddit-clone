@@ -50,14 +50,6 @@ export default function AppLayout({ children }) {
         >
           <div className="min-h-full p-4 sm:p-6">{children}</div>
         </div>
-
-        {/* Right Sidebar - Only visible on desktop */}
-        <div className="hidden sm:block w-60 bg-primary text-primary-foreground h-full">
-          <div className="p-4">
-            <h2 className="text-xl font-bold mb-4">Right Sidebar</h2>
-            <p>Desktop-only sidebar content</p>
-          </div>
-        </div>
       </div>
 
       {/* Overlay for mobile */}

@@ -4,6 +4,7 @@ import cors from "cors";
 import authRouter from "./routes/authRoute.js";
 import communityRouter from "./routes/communityRoute.js";
 import postRoutes from "./routes/postRoutes.js";
+import voteRoutes from "./routes/voteRoutes.js";
 import { uploadMiddleware } from "./middleware/uploadMiddleware.js";
 
 const app = express();
@@ -27,6 +28,7 @@ app.use(uploadMiddleware);
 app.use("/api/auth", authRouter);
 app.use("/api/communities", communityRouter);
 app.use("/api/posts", postRoutes);
+app.use("/api/vote", voteRoutes);
 
 // Basic error handler
 app.use((err, req, res, next) => {

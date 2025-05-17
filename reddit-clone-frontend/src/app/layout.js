@@ -24,7 +24,7 @@ export const metadata = {
 export default function RootLayout({ children }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className="bg-white text-gray-900 dark:bg-gray-900 dark:text-gray-100">
+      <body className="bg-white  dark">
         <ReduxProvider>
           <AuthProvider>
             <ThemeProvider

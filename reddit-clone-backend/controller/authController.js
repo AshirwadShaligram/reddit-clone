@@ -156,6 +156,13 @@ const login = async (req, res) => {
         email: true,
         password: true,
         isActive: true,
+        communities: {
+          select: {
+            id: true,
+            name: true,
+            logo: true,
+          },
+        },
       },
     });
 
@@ -380,6 +387,13 @@ const getCurrentUser = async (req, res) => {
         createdAt: true,
         lastLogin: true,
         isActive: true,
+        communities: {
+          select: {
+            id: true,
+            name: true,
+            logo: true,
+          },
+        },
       },
     });
 

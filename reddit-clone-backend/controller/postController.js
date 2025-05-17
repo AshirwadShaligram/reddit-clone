@@ -13,40 +13,87 @@ cloudinary.config({
 
 // Create a new post
 const createPost = [
-  validateMediaUpload("postImage"), // Using validateMediaUpload instead of validateImageUpload
+  validateMediaUpload("postImage"),
   async (req, res) => {
     try {
-      const { title, content, communityId } = req.body;
-      const authorId = req.userId; // From auth middleware
+      const { title, content, communityId, authorId } = req.body;
+      const userId = req.userId; // From auth middleware
 
-      // Validate required fields
-      if (!title || !content || !communityId) {
+      // Validate mandatory title
+      if (!title) {
+        return res.status(400).json({ error: "Title is required." });
+      }
+
+      // Validate either content or image must be provided
+      if (!content && !req.files?.postImage) {
         return res.status(400).json({
-          error: "Title, content, and communityId are required.",
+          error: "Either content or image must be provided.",
         });
       }
 
-      // Check if community exists
-      const communityExists = await prisma.community.findUnique({
-        where: { id: communityId },
-      });
-
-      if (!communityExists) {
-        return res.status(404).json({ error: "Community not found." });
+      // Validate posting entity - either user or community
+      if (!authorId && !communityId) {
+        return res.status(400).json({
+          error:
+            "Either authorId (for user post) or communityId (for community post) must be provided.",
+        });
       }
 
-      // Upload media to Cloudinary (if provided)
-      let imageUrl;
-      if (req.files && req.files.postImage) {
-        const file = req.files.postImage;
-        const isVideo = req.isVideo; // Set by validateMediaUpload middleware
+      if (authorId && communityId) {
+        return res.status(400).json({
+          error:
+            "Provide only one - authorId for user posts or communityId for community posts.",
+        });
+      }
 
-        // Configure upload based on resource type
+      // If it's a user post
+      if (authorId) {
+        // Verify the authenticated user is the author
+        if (authorId !== userId) {
+          return res.status(403).json({
+            error: "You can only create posts as yourself.",
+          });
+        }
+
+        // Verify user exists
+        const userExists = await prisma.user.findUnique({
+          where: { id: authorId },
+        });
+        if (!userExists) {
+          return res.status(404).json({ error: "User not found." });
+        }
+      }
+
+      // If it's a community post
+      if (communityId) {
+        // Verify community exists
+        const communityExists = await prisma.community.findUnique({
+          where: { id: communityId },
+          include: { createdBy: true },
+        });
+
+        if (!communityExists) {
+          return res.status(404).json({ error: "Community not found." });
+        }
+
+        // Verify the authenticated user is the community creator
+        if (communityExists.createdById !== userId) {
+          return res.status(403).json({
+            error: "Only community creator can post as the community.",
+          });
+        }
+      }
+
+      // Upload media if provided
+      let imageUrl;
+      if (req.files?.postImage) {
+        const file = req.files.postImage;
+        const isVideo = req.isVideo;
+
         const result = await cloudinary.uploader.upload(file.tempFilePath, {
           resource_type: isVideo ? "video" : "image",
           folder: "post_media",
         });
-
         imageUrl = result.secure_url;
       }
 
@@ -55,9 +102,9 @@ const createPost = [
         data: {
           title,
           content,
-          imageUrl, // Using existing imageUrl field for both images and videos
-          communityId,
-          authorId,
+          imageUrl,
+          ...(authorId && { authorId }),
+          ...(communityId && { communityId }),
         },
         include: {
           author: {

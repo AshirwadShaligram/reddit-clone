@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/axiosInstance";
 import { Globe, Lock } from "lucide-react";
+import Link from "next/link";
 
 export default function Communities() {
   const [communities, setCommunities] = useState([]);
@@ -12,9 +13,10 @@ export default function Communities() {
     const fetchCommunities = async () => {
       try {
         const response = await api.get("/api/communities/");
+        // Set communities directly from the response data structure
+
         setCommunities(response.data);
       } catch (err) {
-        setError(err.message || "Failed to fetch communities");
         console.error("Error fetching communities:", err);
       } finally {
         setLoading(false);
@@ -32,11 +34,12 @@ export default function Communities() {
     <div className="p-6">
       <h1 className="text-2xl font-semibold mb-6 text-gray-900">Communities</h1>
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
         {communities.data.map((community) => (
-          <div
+          <Link
             key={community.id}
-            className="flex flex-col items-center p-4 bg-white rounded-lg border border-gray-200 hover:shadow-sm transition-all"
+            href={`/communities/${community.id}`}
+            className="flex flex-col items-center p-4 bg-white rounded-lg border border-gray-200 hover:shadow-md transition-all duration-200"
           >
             <div className="relative mb-3">
               <div className="w-16 h-16 rounded-full bg-gray-100 flex items-center justify-center overflow-hidden">
@@ -65,7 +68,11 @@ export default function Communities() {
             <h3 className="text-sm font-medium text-gray-900 text-center">
               {community.name}
             </h3>
-          </div>
+            <p className="text-xs text-gray-500 mt-1 text-center truncate max-w-full">
+              {community.description?.substring(0, 50)}
+              {community.description?.length > 50 ? "..." : ""}
+            </p>
+          </Link>
         ))}
       </div>
     </div>

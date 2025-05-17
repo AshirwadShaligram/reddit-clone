@@ -26,12 +26,14 @@ import {
 import { Avatar } from "./ui/avatar";
 import { AvatarFallback, AvatarImage } from "@radix-ui/react-avatar";
 import api from "@/lib/axiosInstance";
+import { useRouter } from "next/navigation";
 
 export default function Header() {
   const auth = useSelector((state) => state.auth);
   const [notification] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const dispatch = useDispatch();
+  const router = useRouter();
 
   // Destructure for easier access
   const { user, isAuthenticated } = auth;
@@ -43,6 +45,7 @@ export default function Header() {
 
       // Call logout API
       await api.post("/api/auth/logout");
+      router.push("/");
     } catch (err) {
       console.error("Logout failed:", err);
       // Still ensure user is logged out client-side

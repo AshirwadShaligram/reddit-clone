@@ -56,21 +56,18 @@ model Community {
 }
 
 model Post {
-  id        String   @id @default(cuid())
-  title     String
-  content   String
-  imageUrl  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
-  communityId String
-
-  author   User   @relation(fields: [authorId], references: [id])
-  authorId String
-
-  comments Comment[]
-  votes    Vote[]
+  id          String     @id @default(cuid())
+  title       String
+  content     String?
+  imageUrl    String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  community   Community? @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  communityId String?
+  author      User?      @relation(fields: [authorId], references: [id])
+  authorId    String?
+  comments    Comment[]
+  votes       Vote[]
 
   @@index([communityId])
   @@index([authorId])
@@ -82,12 +79,10 @@ model Comment {
   content   String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
-  postId String
-
-  author   User   @relation(fields: [authorId], references: [id])
-  authorId String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId    String
+  author    User     @relation(fields: [authorId], references: [id])
+  authorId  String
 
   @@index([postId])
   @@index([authorId])
@@ -99,12 +94,10 @@ model Vote {
   type      VoteType
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  user   User   @relation(fields: [userId], references: [id])
-  userId String
-
-  post   Post   @relation(fields: [postId], references: [id], onDelete: Cascade)
-  postId String
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  post      Post     @relation(fields: [postId], references: [id], onDelete: Cascade)
+  postId    String
 
   @@unique([userId, postId])
   @@index([postId])
